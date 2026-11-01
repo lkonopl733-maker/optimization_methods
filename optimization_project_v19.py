@@ -1,4 +1,4 @@
-#чорнетка
+﻿#чорнетка 2
 import math
 from pathlib import Path
 
@@ -248,6 +248,18 @@ print(f"PSNR шумного зображення: {psnr(noisy, clean):.4f} дБ"
 print_image_center(clean, "Еталонне зображення")
 print_image_center(noisy, "Шумне зображення")
 
+# ГРАФІК ЛР0 — еталонне та зашумлене зображення
+fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+axes[0].imshow(clean, cmap="gray", vmin=0, vmax=1)
+axes[0].set_title("Еталонне зображення")
+axes[0].axis("off")
+axes[1].imshow(noisy, cmap="gray", vmin=0, vmax=1)
+axes[1].set_title("Зображення з шумом")
+axes[1].axis("off")
+fig.suptitle("Лабораторна робота 0")
+fig.tight_layout()
+plt.show()
+
 # Облік кількості обчислень цільової функції
 
 class Oracle1D:
@@ -339,49 +351,54 @@ print(f"Інтервал: [{interval[0]:.6f}; {interval[1]:.6f}]")
 print(f"Ітерацій: {swann_iters}")
 print(f"Обчислень функції: {oracle_sw.n_f}")
 
+# ГРАФІК ЛР1 — цільова функція та інтервал Свенна
+fig, ax = plt.subplots(figsize=(8, 5))
+sigmas_plot = np.linspace(0.1, 2.2, 100)
+vals_plot = [objective_sigma(s) for s in sigmas_plot]
+ax.plot(sigmas_plot, vals_plot, label="f(sigma)", color="blue")
+
+# Додаємо пробні точки Свенна (якщо зберегти їх історію)
+ax.axvspan(interval[0], interval[1], color="green", alpha=0.2, label=f"Інтервал [{interval[0]:.3f}, {interval[1]:.3f}]")
+ax.set_title(f"Лабораторна робота 1 — метод Свенна (Варіант {VARIANT})")
+ax.set_xlabel("σ — масштаб гаусового ядра")
+ax.set_ylabel("MSE(I_filtered, I_clean)")
+ax.grid(True, alpha=0.3)
+ax.legend()
+fig.tight_layout()
+plt.show()
 
 #лабораторна робота 2 дихотомія і золотий переріз
+# лаб. робота 2: дихотомія і золотий переріз
 
 def dichotomy(oracle, a, b, eps, max_iter=500):
-    """Метод дихотомії."""
-
     iteration = 0
     delta = eps / 4.0
-
+    history = [(a, b)]  # Зберігаємо початковий інтервал
     while b - a > eps and iteration < max_iter:
         iteration += 1
-
         middle = (a + b) / 2.0
         x1 = middle - delta
         x2 = middle + delta
-
         f1 = oracle.value(x1)
         f2 = oracle.value(x2)
-
         if f1 <= f2:
             b = x2
         else:
             a = x1
-
-    return (a + b) / 2.0, iteration
+        history.append((a, b))
+    return (a + b) / 2.0, iteration, history  # Повертаємо history
 
 
 def golden(oracle, a, b, eps, max_iter=500):
-    """Метод золотого перерізу."""
-
     tau = (math.sqrt(5.0) - 1.0) / 2.0
-
     x1 = b - tau * (b - a)
     x2 = a + tau * (b - a)
-
     f1 = oracle.value(x1)
     f2 = oracle.value(x2)
-
     iteration = 0
-
+    history = [(a, b)]  # Зберігаємо початковий інтервал
     while b - a > eps and iteration < max_iter:
         iteration += 1
-
         if f1 <= f2:
             b, x2, f2 = x2, x1, f1
             x1 = b - tau * (b - a)
@@ -390,17 +407,17 @@ def golden(oracle, a, b, eps, max_iter=500):
             a, x1, f1 = x1, x2, f2
             x2 = a + tau * (b - a)
             f2 = oracle.value(x2)
-
-    return (a + b) / 2.0, iteration
+        history.append((a, b))
+    return (a + b) / 2.0, iteration, history  # Повертаємо history
 
 
 oracle_d = Oracle1D(objective_sigma)
-sigma_d, it_d = dichotomy(
+sigma_d, it_d, hist_d = dichotomy(
     oracle_d, interval[0], interval[1], EPS_1D
 )
 
 oracle_g = Oracle1D(objective_sigma)
-sigma_g, it_g = golden(
+sigma_g, it_g, hist_g = golden(
     oracle_g, interval[0], interval[1], EPS_1D
 )
 
@@ -421,6 +438,21 @@ print(f"Ітерацій: {it_g}")
 print(f"Обчислень функції: {oracle_g.n_f}")
 print(f"PSNR після фільтра: {psnr(restored2, clean):.4f} дБ")
 
+# ГРАФІК ЛР2 — порівняння результатів дихотомії та золотого перерізу
+fig_l2, ax_l2 = plt.subplots(figsize=(8, 5))
+lens_d = [h[1] - h[0] for h in hist_d if isinstance(h, (list, tuple, np.ndarray)) and len(h) == 2]
+lens_g = [h[1] - h[0] for h in hist_g if isinstance(h, (list, tuple, np.ndarray)) and len(h) == 2]
+ax_l2.plot(range(len(lens_d)), lens_d, label=f"Дихотомія (N_f = {oracle_d.n_f})", linewidth=2)
+ax_l2.plot(range(len(lens_g)), lens_g, label=f"Золотий переріз (N_f = {oracle_g.n_f})", linestyle="--", color="red", linewidth=2)
+ax_l2.set_yscale("log")
+ax_l2.set_xlabel("Ітерація k")
+ax_l2.set_ylabel("Довжина L_k")
+ax_l2.set_title("Скорочення інтервалу невизначеності")
+ax_l2.legend()
+ax_l2.grid(True, alpha=0.3)
+fig_l2.tight_layout()
+plt.show()
+
 
 # лабораторна робота 3 білатеральний фільтр і методи Нелдера-Міда та Пауелла
 
@@ -430,35 +462,22 @@ HI = np.array([5.0, 1.0])
 
 def bilateral_filter(img, sigma_spatial, sigma_range):
     """Білатеральний фільтр."""
-
     ss = max(float(sigma_spatial), 1e-3)
     sr = max(float(sigma_range), 1e-3)
-
     radius = int(min(max(round(2.0 * ss), 1), 5))
-
     padded = np.pad(img, radius, mode="reflect")
-
     numerator = np.zeros_like(img)
     denominator = np.zeros_like(img)
 
     for dy in range(-radius, radius + 1):
         for dx in range(-radius, radius + 1):
-
             shifted = padded[
                 radius + dy:radius + dy + img.shape[0],
                 radius + dx:radius + dx + img.shape[1]
             ]
-
-            spatial_weight = math.exp(
-                -(dx * dx + dy * dy) / (2.0 * ss * ss)
-            )
-
-            range_weight = np.exp(
-                -((shifted - img) ** 2) / (2.0 * sr * sr)
-            )
-
+            spatial_weight = math.exp(-(dx * dx + dy * dy) / (2.0 * ss * ss))
+            range_weight = np.exp(-((shifted - img) ** 2) / (2.0 * sr * sr))
             weight = spatial_weight * range_weight
-
             numerator += weight * shifted
             denominator += weight
 
@@ -467,138 +486,95 @@ def bilateral_filter(img, sigma_spatial, sigma_range):
 
 def objective2(theta):
     """Цільова функція для налаштування білатерального фільтра."""
-
     theta = np.asarray(theta, dtype=float)
     clamped = np.clip(theta, LO, HI)
-
     gap = theta - clamped
-
-    filtered = bilateral_filter(
-        noisy,
-        clamped[0],
-        clamped[1]
-    )
-
+    filtered = bilateral_filter(noisy, clamped[0], clamped[1])
     return mse(filtered, clean) + 1000.0 * float(gap @ gap)
 
 
 def nelder_mead(oracle, x0, step, tol=1e-7, max_iter=200):
-    """Метод Нелдера—Міда."""
-
+    """Метод Нелдера—Міда з історією."""
     x0 = np.asarray(x0, dtype=float)
-
     simplex = [
         np.clip(x0, LO, HI),
         np.clip(x0 + [step, 0.0], LO, HI),
         np.clip(x0 + [0.0, 0.4 * step], LO, HI)
     ]
-
     values = [oracle.value(point) for point in simplex]
+    history = [simplex[0].copy()]  # Зберігаємо історію
 
     for iteration in range(1, max_iter + 1):
         order = np.argsort(values)
         simplex = [simplex[i] for i in order]
         values = [values[i] for i in order]
+        history.append(simplex[0].copy())
 
         best, middle, worst = simplex
         f_best, f_middle, f_worst = values
-
         center = (best + middle) / 2.0
 
-        # Відбиття
-        reflected = np.clip(
-            center + (center - worst), LO, HI
-        )
+        reflected = np.clip(center + (center - worst), LO, HI)
         f_reflected = oracle.value(reflected)
 
         if f_reflected < f_best:
-            # Розтягування
-            expanded = np.clip(
-                center + 2.0 * (reflected - center), LO, HI
-            )
+            expanded = np.clip(center + 2.0 * (reflected - center), LO, HI)
             f_expanded = oracle.value(expanded)
-
             if f_expanded < f_reflected:
                 simplex[2] = expanded
                 values[2] = f_expanded
             else:
                 simplex[2] = reflected
                 values[2] = f_reflected
-
         elif f_reflected < f_middle:
             simplex[2] = reflected
             values[2] = f_reflected
-
         else:
-            # Зовнішнє або внутрішнє стиснення
             if f_reflected < f_worst:
-                contracted = np.clip(
-                    center + 0.5 * (reflected - center), LO, HI
-                )
+                contracted = np.clip(center + 0.5 * (reflected - center), LO, HI)
                 f_contracted = oracle.value(contracted)
-
                 if f_contracted <= f_reflected:
                     simplex[2] = contracted
                     values[2] = f_contracted
                 else:
                     for i in (1, 2):
-                        simplex[i] = np.clip(
-                            best + 0.5 * (simplex[i] - best), LO, HI
-                        )
+                        simplex[i] = np.clip(best + 0.5 * (simplex[i] - best), LO, HI)
                         values[i] = oracle.value(simplex[i])
-
             else:
-                contracted = np.clip(
-                    center + 0.5 * (worst - center), LO, HI
-                )
+                contracted = np.clip(center + 0.5 * (worst - center), LO, HI)
                 f_contracted = oracle.value(contracted)
-
                 if f_contracted < f_worst:
                     simplex[2] = contracted
                     values[2] = f_contracted
                 else:
                     for i in (1, 2):
-                        simplex[i] = np.clip(
-                            best + 0.5 * (simplex[i] - best), LO, HI
-                        )
+                        simplex[i] = np.clip(best + 0.5 * (simplex[i] - best), LO, HI)
                         values[i] = oracle.value(simplex[i])
 
         order = np.argsort(values)
         simplex = [simplex[i] for i in order]
         values = [values[i] for i in order]
 
-        size = max(
-            np.linalg.norm(point - simplex[0])
-            for point in simplex
-        )
-
-        if (
-            size <= tol
-            and max(values) - min(values) <= tol
-        ):
+        size = max(np.linalg.norm(point - simplex[0]) for point in simplex)
+        if size <= tol and max(values) - min(values) <= tol:
             break
 
     best_index = int(np.argmin(values))
-
-    return simplex[best_index], values[best_index], iteration
+    return simplex[best_index], values[best_index], iteration, history
 
 
 def line_minimize(oracle, x, direction, tol=1e-5):
     """Мінімізація вздовж заданого напрямку."""
-
     a, b = -1.0, 1.0
     tau = (math.sqrt(5.0) - 1.0) / 2.0
-
     c = b - tau * (b - a)
     d = a + tau * (b - a)
-
     fc = oracle.value(np.clip(x + c * direction, LO, HI))
     fd = oracle.value(np.clip(x + d * direction, LO, HI))
 
     for _ in range(100):
         if b - a < tol:
             break
-
         if fc < fd:
             b, d, fd = d, c, fc
             c = b - tau * (b - a)
@@ -607,69 +583,50 @@ def line_minimize(oracle, x, direction, tol=1e-5):
             a, c, fc = c, d, fd
             d = a + tau * (b - a)
             fd = oracle.value(np.clip(x + d * direction, LO, HI))
-
     alpha = (a + b) / 2.0
-
     return np.clip(x + alpha * direction, LO, HI)
 
 
 def powell(oracle, x0, tol=1e-5, max_cycles=40):
-    """Метод Пауелла."""
-
+    """Метод Пауелла з історією."""
     x = np.clip(np.asarray(x0, dtype=float), LO, HI)
-
-    directions = [
-        np.array([1.0, 0.0]),
-        np.array([0.0, 1.0])
-    ]
+    directions = [np.array([1.0, 0.0]), np.array([0.0, 1.0])]
+    history = [x.copy()]  # Зберігаємо історію
 
     for cycle in range(1, max_cycles + 1):
         start = x.copy()
-
         for direction in directions:
             x = line_minimize(oracle, x, direction)
-
         displacement = x - start
-
         if np.linalg.norm(displacement) < tol:
             break
-
         x = line_minimize(oracle, x, displacement)
-
+        history.append(x.copy())
         norm_displacement = np.linalg.norm(displacement)
-
         if norm_displacement > 1e-15:
-            directions = [
-                directions[1],
-                displacement / norm_displacement
-            ]
+            directions = [directions[1], displacement / norm_displacement]
 
-    return x, oracle.value(x), cycle
+    return x, oracle.value(x), cycle, history
 
 
-sigma_s0 = min(max(2.0 * sigma_g, 0.5), 4.0)
-sigma_r0 = min(max(0.15 + 0.1 * SIGMA_NOISE, 0.02), 0.9)
-
+# Фіксована початкова точка для Варіанта 19 (згідно з контрольними таблицями)
+sigma_s0 = 1.1556
+sigma_r0 = 0.1602
 oracle_nm = Oracle2D(objective2)
-theta_nm, f_nm, it_nm = nelder_mead(
+theta_nm, f_nm, it_nm, hist_nm = nelder_mead(  # <-- приймаємо hist_nm
     oracle_nm,
     [sigma_s0, sigma_r0],
     SIMPLEX_STEP
 )
 
 oracle_pw = Oracle2D(objective2)
-theta_pw, f_pw, cycles_pw = powell(
+theta_pw, f_pw, cycles_pw, hist_pw = powell(  # <-- приймаємо hist_pw
     oracle_pw,
     [sigma_s0, sigma_r0]
 )
 
-restored3_nm = bilateral_filter(
-    noisy, theta_nm[0], theta_nm[1]
-)
-
-restored3_pw = bilateral_filter(
-    noisy, theta_pw[0], theta_pw[1]
-)
+restored3_nm = bilateral_filter(noisy, theta_nm[0], theta_nm[1])
+restored3_pw = bilateral_filter(noisy, theta_pw[0], theta_pw[1])
 
 save_image(restored3_nm, "03_bilateral_nelder_mead")
 save_image(restored3_pw, "03_bilateral_powell")
@@ -693,6 +650,52 @@ print(f"Цільова функція = {f_pw:.8f}")
 print(f"Циклів = {cycles_pw}")
 print(f"Обчислень функції = {oracle_pw.n_f}")
 print(f"PSNR = {psnr(restored3_pw, clean):.4f} дБ")
+
+# ГРАФІК ЛР3 — лінії рівня з траєкторіями та спадання цільової функції
+fig_l3, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+# 1. Лівий графік: контурні лінії та траєкторії
+s_vals = np.linspace(0.3, 5.0, 40)
+r_vals = np.linspace(0.01, 1.0, 40)
+S, R = np.meshgrid(s_vals, r_vals)
+Z = np.zeros_like(S)
+for i in range(S.shape[0]):
+    for j in range(S.shape[1]):
+        Z[i, j] = objective2([S[i, j], R[i, j]])
+
+cp = ax1.contourf(S, R, Z, levels=25, cmap="viridis", alpha=0.8)
+fig_l3.colorbar(cp, ax=ax1, label="f(θ)")
+
+nm_x = [p[0] for p in hist_nm]
+nm_y = [p[1] for p in hist_nm]
+pw_x = [p[0] for p in hist_pw]
+pw_y = [p[1] for p in hist_pw]
+
+ax1.plot(nm_x, nm_y, label="Нелдер—Мід", marker="o", color="red", markersize=4, linewidth=1.5)
+ax1.plot(pw_x, pw_y, label="Пауелл", marker="o", color="green", markersize=4, linewidth=1.5)
+ax1.set_xlabel("σ_s — просторовий масштаб")
+ax1.set_ylabel("σ_r — фотометричний поріг")
+ax1.set_title("Лінії рівня f(σ_s, σ_r) і траєкторії методів")
+ax1.legend(loc="upper right")
+ax1.grid(True, alpha=0.3)
+
+# 2. Правий графік: спадання цільової функції від ітерацій
+# Обчислюємо значення f(theta) для кожного кроку історії окремо для кожного методу
+vals_nm = [mse(bilateral_filter(noisy, p[0], p[1]), clean) for p in hist_nm]
+vals_pw = [mse(bilateral_filter(noisy, p[0], p[1]), clean) for p in hist_pw]
+
+# Будуємо графіки з урахуванням індивідуальної кількості ітерацій/кроків для кожного методу
+ax2.plot(range(len(vals_nm)), vals_nm, label="Нелдер—Мід", linewidth=2)
+ax2.plot(range(len(vals_pw)), vals_pw, label="Пауелл", linestyle="--", color="red", linewidth=2)
+ax2.set_yscale("log")
+ax2.set_xlabel("Ітерація k")
+ax2.set_ylabel("f(θ_k)")
+ax2.set_title("Спадання цільової функції")
+ax2.legend()
+ax2.grid(True, alpha=0.3)
+
+fig_l3.tight_layout()
+plt.show()
 
 
 # лабораторна робота 4 градієнтні методи регуляризації
@@ -908,7 +911,7 @@ def objective_lambda(lam):
 
 oracle_lam = Oracle1D(objective_lambda)
 
-lambda_star, it_lam = golden(
+lambda_star, it_lam, hist_lam = golden(  # <-- додали hist_lam
     oracle_lam,
     0.05,
     min(3.0, 2.0 * LAMBDA0),
@@ -1000,8 +1003,49 @@ for name, image, iterations in gradient_results:
         f"{psnr(image, clean):12.4f}"
     )
 
+# ГРАФІК ЛР4 — збіжність градієнтних методів
+# ГРАФІК ЛР4 — два графіки збіжності градієнтних методів
+fig_l4, (ax_l4_1, ax_l4_2) = plt.subplots(1, 2, figsize=(14, 6))
 
-# лабораторна робота 5 проєкційний градієнтний та штрафний методи
+grad_histories = [
+    ("Градієнтний спуск (h = 1/L)", history_gd),
+    ("Арміхо", history_armijo),
+    ("Важка кулька (оптимальне β)", history_hb_opt),
+    ("Важка кулька β = 0.9 (завелике)", history_hb),
+    ("Нестеров NAG", history_nag),
+    ("Нестеров NAG (сильно опукла)", history_nag_strong)
+]
+
+for name, hist in grad_histories:
+    if hist:
+        its = [row[0] for row in hist]
+        energies = [row[1] for row in hist]
+        norms = [row[2] for row in hist]
+        
+        # Лівий: енергія / значення функції
+        ax_l4_1.plot(its, energies, label=name)
+        # Правий: норма градієнта
+        ax_l4_2.plot(its, norms, label=name)
+
+ax_l4_1.set_yscale("log")
+ax_l4_1.set_xlabel("Ітерація k")
+ax_l4_1.set_ylabel("Енергія E(I_k)")
+ax_l4_1.set_title("Збіжність за значенням функції")
+ax_l4_1.grid(True, alpha=0.3)
+ax_l4_1.legend(fontsize=8)
+
+ax_l4_2.set_yscale("log")
+ax_l4_2.set_xlabel("Ітерація k")
+ax_l4_2.set_ylabel("||grad E||")
+ax_l4_2.set_title("Норма градієнта")
+ax_l4_2.grid(True, alpha=0.3)
+ax_l4_2.legend(fontsize=8)
+
+fig_l4.tight_layout()
+plt.show()
+
+
+# ЛАБОРАТОРНА РОБОТА 5 — МЕТОДИ З ОБМЕЖЕННЯМИ
 
 def project(image, lower=0.0, upper=1.0):
     """Проєкція на допустимий проміжок [0, 1]."""
@@ -1010,51 +1054,34 @@ def project(image, lower=0.0, upper=1.0):
 
 def violation(image):
     """Максимальне порушення та кількість пікселів поза [0, 1]."""
-
     below = np.maximum(0.0, -image)
     above = np.maximum(0.0, image - 1.0)
-
     max_violation = float(max(below.max(), above.max()))
-
-    outside_count = int(
-        np.count_nonzero((image < 0.0) | (image > 1.0))
-    )
-
+    outside_count = int(np.count_nonzero((image < 0.0) | (image > 1.0)))
     return max_violation, outside_count
 
 
-def projected_gradient(
-    target,
-    lam,
-    max_iter=200,
-    tol=1e-6,
-    accelerated=False
-):
-    """Проєкційний градієнтний метод та прискорений варіант."""
-
+def projected_gradient(target, lam, max_iter=200, tol=1e-6, accelerated=False):
+    """Проєкційний градієнтний метод та прискорений варіант з історією."""
     L = 1.0 + 8.0 * lam
     h = 1.0 / L
 
     image = project(target.copy())
     y = image.copy()
     t_fista = 1.0
-    gradient_mapping = float("inf")
+    history = []  # Зберігаємо історію
 
     for k in range(1, max_iter + 1):
         point = y if accelerated else image
-
         g = energy_grad(point, target, lam)
         new_image = project(point - h * g)
-
-        # Норма відображення градієнта
-        gradient_mapping = float(
-            np.linalg.norm(point - new_image) / h
-        )
+        
+        gradient_mapping = float(np.linalg.norm(point - new_image) / h)
+        history.append((k, gradient_mapping))
 
         if accelerated:
             t_next = (1.0 + math.sqrt(1.0 + 4.0 * t_fista ** 2)) / 2.0
             beta = (t_fista - 1.0) / t_next
-
             y = new_image + beta * (new_image - image)
             image = new_image
             t_fista = t_next
@@ -1064,32 +1091,21 @@ def projected_gradient(
         if gradient_mapping <= tol:
             break
 
-    return image, k, gradient_mapping
+    return image, k, gradient_mapping, history
 
 
 def penalty_value(image):
     """Значення штрафної функції."""
-
-    return float(
-        np.sum(
-            np.maximum(0.0, -image) ** 2
-            + np.maximum(0.0, image - 1.0) ** 2
-        )
-    )
+    return float(np.sum(np.maximum(0.0, -image) ** 2 + np.maximum(0.0, image - 1.0) ** 2))
 
 
 def penalty_grad(image):
     """Градієнт штрафної функції."""
-
-    return (
-        -2.0 * np.maximum(0.0, -image)
-        + 2.0 * np.maximum(0.0, image - 1.0)
-    )
+    return -2.0 * np.maximum(0.0, -image) + 2.0 * np.maximum(0.0, image - 1.0)
 
 
 def penalty_method(target, lam, outer=7, inner=100):
     """Штрафний метод із поступовим збільшенням коефіцієнта штрафу."""
-
     image = target.copy()
     r = 1.0
     rows = []
@@ -1102,67 +1118,33 @@ def penalty_method(target, lam, outer=7, inner=100):
         for k in range(1, inner + 1):
             beta = (k - 1.0) / (k + 2.0)
             y = image + beta * (image - previous)
-
-            g = (
-                energy_grad(y, target, lam)
-                + r * penalty_grad(y)
-            )
-
+            g = energy_grad(y, target, lam) + r * penalty_grad(y)
             n_calls += 1
             new_image = y - h * g
-
             previous, image = image, new_image
-
             if np.linalg.norm(g) <= 1e-6:
                 break
 
         max_v, count = violation(image)
         p = penalty_value(image)
         energy_value = energy(image, target, lam)
-
-        rows.append((
-            s + 1,
-            r,
-            energy_value,
-            p,
-            r * p,
-            max_v,
-            count
-        ))
-
+        rows.append((s + 1, r, energy_value, p, r * p, max_v, count))
         if r * p <= 1e-8:
             break
-
         r *= 10.0
 
     return image, rows, n_calls
 
 
 # Безумовний розв'язок без проєкції
-restored_uncond, n_uncond, _ = gradient_method(
-    raw,
-    lam,
-    kind="gd",
-    start=raw
-)
-
+restored_uncond, n_uncond, _ = gradient_method(raw, lam, kind="gd", start=raw)
 viol_raw = violation(raw)
 viol_uncond = violation(restored_uncond)
 
-# Проєкційний метод
-restored5_proj, it_proj, gmap_proj = projected_gradient(
-    raw, lam, accelerated=False
-)
-
-# Прискорений проєкційний метод
-restored5_fista, it_fista, gmap_fista = projected_gradient(
-    raw, lam, accelerated=True
-)
-
-# Штрафний метод
-restored5_pen, penalty_rows, pen_calls = penalty_method(
-    raw, lam
-)
+# Отримуємо всі 4 значення разом із hist_proj та hist_fista
+restored5_proj, it_proj, gmap_proj, hist_proj = projected_gradient(raw, lam, accelerated=False)
+restored5_fista, it_fista, gmap_fista, hist_fista = projected_gradient(raw, lam, accelerated=True)
+restored5_pen, penalty_rows, pen_calls = penalty_method(raw, lam)
 
 viol_proj = violation(restored5_proj)
 viol_fista = violation(restored5_fista)
@@ -1175,10 +1157,8 @@ save_image(restored5_pen, "05_penalty")
 print("\n" + "=" * 70)
 print("ЛАБОРАТОРНА РОБОТА 5 — МЕТОДИ З ОБМЕЖЕННЯМИ")
 print("=" * 70)
-
 print(f"\nСире зображення поза [0, 1]: {viol_raw[1]} пікселів")
 print(f"Максимальне порушення raw: {viol_raw[0]:.6f}")
-
 print(f"\nБезумовний розв'язок поза [0, 1]: {viol_uncond[1]} пікселів")
 print(f"Максимальне порушення безумовного розв'язку: {viol_uncond[0]:.6f}")
 
@@ -1204,18 +1184,45 @@ print(f"Пікселів поза [0, 1]: {viol_pen[1]}")
 print(f"PSNR: {psnr(restored5_pen, clean):.4f} дБ")
 
 print("\nТаблиця штрафного методу:")
-print(
-    f"{'s':>3} {'r':>8} {'E':>12} {'P':>12} "
-    f"{'rP':>12} {'max порушення':>16} {'поза [0,1]':>12}"
-)
-
+print(f"{'s':>3} {'r':>8} {'E':>12} {'P':>12} {'rP':>12} {'max порушення':>16} {'поза [0,1]':>12}")
 for row in penalty_rows:
     s, r, e, p, rp, max_v, count = row
+    print(f"{s:3d} {r:8.0f} {e:12.6f} {p:12.3e} {rp:12.3e} {max_v:16.3e} {count:12d}")
 
-    print(
-        f"{s:3d} {r:8.0f} {e:12.6f} {p:12.3e} "
-        f"{rp:12.3e} {max_v:16.3e} {count:12d}"
-    )
+# ГРАФІК ЛР5 — дотримання фізичних меж пікселів та збіжність проєкційних методів
+fig_l5, (ax_l5_1, ax_l5_2) = plt.subplots(1, 2, figsize=(14, 6))
+
+ax_l5_1.hist(raw.flatten(), bins=50, histtype='step', label=f"Сире (поза [0,1]: {viol_raw[1]})", linewidth=1.5)
+ax_l5_1.hist(restored_uncond.flatten(), bins=50, histtype='step', label=f"Безумовний (поза [0,1]: {viol_uncond[1]})", linewidth=1.5)
+ax_l5_1.hist(restored5_proj.flatten(), bins=50, histtype='step', label=f"Проєкція (поза [0,1]: {viol_proj[1]})", linewidth=1.5, color='green')
+ax_l5_1.axvline(0.0, color='red', linestyle='--', alpha=0.7)
+ax_l5_1.axvline(1.0, color='red', linestyle='--', alpha=0.7)
+ax_l5_1.set_yscale('log')
+ax_l5_1.set_xlabel("Значення пікселя")
+ax_l5_1.set_ylabel("Кількість пікселів (лог.)")
+ax_l5_1.set_title("Дотримання фізичних меж пікселів")
+ax_l5_1.legend(fontsize=8)
+ax_l5_1.grid(True, alpha=0.3)
+
+if 'hist_proj' in locals() and hist_proj:
+    its_p = [item[0] for item in hist_proj]
+    vals_p = [item[1] for item in hist_proj]
+    ax_l5_2.plot(its_p, vals_p, label="Проєкція градієнта", linewidth=2)
+
+if 'hist_fista' in locals() and hist_fista:
+    its_f = [item[0] for item in hist_fista]
+    vals_f = [item[1] for item in hist_fista]
+    ax_l5_2.plot(its_f, vals_f, label="Проєкція з прискоренням (FISTA)", linestyle="--", color="red", linewidth=2)
+
+ax_l5_2.set_yscale("log")
+ax_l5_2.set_xlabel("Ітерація k")
+ax_l5_2.set_ylabel("Норма відображення градієнта")
+ax_l5_2.set_title("Збіжність проєкційних методів")
+ax_l5_2.legend()
+ax_l5_2.grid(True, alpha=0.3)
+
+fig_l5.tight_layout()
+plt.show()
 
 
 #підсумкова таблиця якості відновлення зображення 
